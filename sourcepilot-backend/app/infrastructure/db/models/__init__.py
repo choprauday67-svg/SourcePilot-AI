@@ -7,6 +7,7 @@ from app.infrastructure.db.models.rfq import RFQ, RFQDispatch
 from app.infrastructure.db.models.quotation import Quotation
 from app.infrastructure.db.models.recommendation import Recommendation
 from app.infrastructure.db.models.audit import AuditLog
+from app.infrastructure.db.models.comment import RequirementComment  # Phase 2
 
 __all__ = [
     "Organization",
@@ -20,5 +21,6 @@ __all__ = [
     "RFQDispatch",
     "Quotation",
     "Recommendation",
-    "AuditLog"
+    "AuditLog",
+    "RequirementComment",  # Phase 2
 ]

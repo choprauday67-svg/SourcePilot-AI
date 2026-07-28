@@ -62,7 +62,32 @@ export const SupplierCard: React.FC<SupplierCardProps> = ({ match, isSelected, o
         </div>
       </div>
 
-      <div style={{ margin: '1rem 0', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+      <div style={{ margin: '1rem 0', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+        {/* Connector Provenance Badge */}
+        {explanation.source_connector && (
+          <span style={{
+            background: explanation.source_connector === 'trade_registry' ? 'rgba(16, 185, 129, 0.15)' :
+                        explanation.source_connector === 'review_sites' ? 'rgba(168, 85, 247, 0.15)' :
+                        explanation.source_connector === 'marketplace' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(148, 163, 184, 0.1)',
+            color: explanation.source_connector === 'trade_registry' ? '#10b981' :
+                   explanation.source_connector === 'review_sites' ? '#c084fc' :
+                   explanation.source_connector === 'marketplace' ? '#fbbf24' : '#94a3b8',
+            border: `1px solid ${explanation.source_connector === 'trade_registry' ? '#10b98140' :
+                                explanation.source_connector === 'review_sites' ? '#c084fc40' :
+                                explanation.source_connector === 'marketplace' ? '#fbbf2440' : '#94a3b830'}`,
+            padding: '3px 10px',
+            borderRadius: '12px',
+            fontSize: '0.75rem',
+            fontWeight: '700',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em'
+          }}>
+            {explanation.source_connector === 'trade_registry' ? '🏛️ Registry Verified' :
+             explanation.source_connector === 'review_sites' ? '⭐ Buyer Reviewed' :
+             explanation.source_connector === 'marketplace' ? '🌐 B2B Marketplace' : '🔍 Web Search'}
+          </span>
+        )}
+
         {((supplier.profiles?.[0]?.certifications) || ["ISO 9001:2015"]).map((cert: string, idx: number) => (
           <span key={idx} style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', padding: '3px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600' }}>
             <Award size={12} style={{ display: 'inline', marginRight: '4px' }} />

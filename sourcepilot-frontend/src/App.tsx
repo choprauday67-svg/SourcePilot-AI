@@ -7,6 +7,7 @@ import { RFQEditor } from './components/RFQEditor';
 import { ComparisonTable } from './components/ComparisonTable';
 import { ExecutiveRecommendation } from './components/ExecutiveRecommendation';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
+import { CommentThread } from './components/CommentThread';
 import { Sparkles, FileText, Search, Send, Award, RefreshCw } from 'lucide-react';
 
 const API_BASE = '/api/v1';
@@ -258,19 +259,23 @@ export function App() {
             <RequirementForm onSubmit={handleRequirementSubmit} isLoading={isExtracting} />
 
             {currentRequirement && (
-              <div className="glass-card" style={{ padding: '1.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3 style={{ fontSize: '1.1rem', color: '#f8fafc' }}>{currentRequirement.title}</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-                      "{currentRequirement.raw_text}"
-                    </p>
+              <>
+                <div className="glass-card" style={{ padding: '1.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h3 style={{ fontSize: '1.1rem', color: '#f8fafc' }}>{currentRequirement.title}</h3>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                        "{currentRequirement.raw_text}"
+                      </p>
+                    </div>
+                    <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+                      Review AI Extraction Modal
+                    </button>
                   </div>
-                  <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-                    Review AI Extraction Modal
-                  </button>
                 </div>
-              </div>
+
+                <CommentThread requirementId={currentRequirement.id} token={token} />
+              </>
             )}
           </div>
         )}

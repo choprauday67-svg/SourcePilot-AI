@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 
+
 @dataclass
 class RawSupplierCandidate:
     company_name: str
@@ -17,6 +18,11 @@ class RawSupplierCandidate:
     certifications: List[str] = field(default_factory=lambda: ["ISO 9001"])
     estimated_price_range: Optional[Dict[str, Any]] = None
     raw_metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def connector_source_label(self) -> str:
+        """Return a normalised source label for provenance classification."""
+        return self.source_connector.lower().replace("-", "_")
+
 
 class SupplierConnector(ABC):
     name: str

@@ -11,9 +11,11 @@ def test_root_endpoint():
 
 def test_register_and_login_flow():
     # 1. Register new organization
+    import uuid
+    random_id = str(uuid.uuid4())[:8]
     reg_payload = {
-        "org_name": "Test Acme Sourcing",
-        "email": "buyer@acmesourcing.com",
+        "org_name": f"Test Acme Sourcing {random_id}",
+        "email": f"buyer_{random_id}@acmesourcing.com",
         "password": "SecretPassword123!",
         "full_name": "Jane Doe"
     }
@@ -25,7 +27,7 @@ def test_register_and_login_flow():
 
     # 2. Login with registered user
     login_payload = {
-        "email": "buyer@acmesourcing.com",
+        "email": f"buyer_{random_id}@acmesourcing.com",
         "password": "SecretPassword123!"
     }
     res_login = client.post("/api/v1/auth/login", json=login_payload)
