@@ -8,6 +8,7 @@ from app.infrastructure.db.models.quotation import Quotation
 from app.infrastructure.db.models.recommendation import Recommendation
 from app.infrastructure.db.models.audit import AuditLog
 from app.infrastructure.db.models.comment import RequirementComment  # Phase 2
+from app.infrastructure.db.models.saved_supplier import SavedSupplier  # Phase 3
 
 __all__ = [
     "Organization",
@@ -23,4 +24,5 @@ __all__ = [
     "Recommendation",
     "AuditLog",
     "RequirementComment",  # Phase 2
+    "SavedSupplier",       # Phase 3
 ]

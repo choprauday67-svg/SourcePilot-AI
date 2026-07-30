@@ -152,17 +152,30 @@ async def receive_inbound_email(
         latest_req = db.query(ProcurementRequirement).order_by(ProcurementRequirement.created_at.desc()).first()
         resolved_req_id = latest_req.id if latest_req else None
 
-    # --- Persist structured quotation ---
-    quotation = Quotation(
-        supplier_id=supplier.id,
-        requirement_id=resolved_req_id,
-        rfq_dispatch_id=None,
-        raw_email_body=payload.body_text,
-        extracted_data=extraction.model_dump(),
-        extraction_confidence=extraction.confidence_score,
-        received_at=datetime.utcnow(),
-    )
-    db.add(quotation)
+    # --- Persist structured quotation (upsert to prevent duplicates) ---
+    existing_quote = db.query(Quotation).filter(
+        Quotation.supplier_id == supplier.id,
+        Quotation.requirement_id == resolved_req_id,
+    ).first() if resolved_req_id else None
+
+    if existing_quote:
+        existing_quote.raw_email_body = payload.body_text
+        existing_quote.extracted_data = extraction.model_dump()
+        existing_quote.extraction_confidence = extraction.confidence_score
+        existing_quote.received_at = datetime.utcnow()
+        quotation = existing_quote
+    else:
+        quotation = Quotation(
+            supplier_id=supplier.id,
+            requirement_id=resolved_req_id,
+            rfq_dispatch_id=None,
+            raw_email_body=payload.body_text,
+            extracted_data=extraction.model_dump(),
+            extraction_confidence=extraction.confidence_score,
+            received_at=datetime.utcnow(),
+        )
+        db.add(quotation)
+
     db.commit()
     db.refresh(quotation)
 

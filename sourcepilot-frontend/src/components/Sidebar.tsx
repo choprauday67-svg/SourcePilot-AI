@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, FileText, Users, Award, BarChart3, Settings, ShieldCheck, Zap } from 'lucide-react';
+import { Compass, FileText, Users, Award, BarChart3, ShieldCheck, Zap, Bookmark, Brain } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -8,12 +8,17 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const navItems = [
-    { id: 'requirements', label: 'Requirements', icon: FileText },
-    { id: 'suppliers', label: 'Supplier Ranking', icon: Users },
-    { id: 'rfq', label: 'RFQ Dispatch', icon: Compass },
-    { id: 'quotations', label: 'Quote Comparison', icon: Award },
-    { id: 'analytics', label: 'Spend Analytics', icon: BarChart3 },
+    { id: 'requirements', label: 'Requirements',     icon: FileText,  section: '' },
+    { id: 'suppliers',    label: 'Supplier Ranking', icon: Users,     section: '' },
+    { id: 'rfq',          label: 'RFQ & Approval',   icon: Compass,   section: '' },
+    { id: 'quotations',   label: 'Quote Comparison', icon: Award,     section: '' },
+    { id: 'analytics',    label: 'Spend Analytics',  icon: BarChart3, section: '' },
+    // ── Phase 3 ──
+    { id: 'library',      label: 'Supplier Library', icon: Bookmark,  section: 'Phase 3' },
+    { id: 'intelligence', label: 'Market Intel',     icon: Brain,     section: '' },
   ];
+
+  let lastSection = '';
 
   return (
     <aside className="sidebar">
@@ -21,7 +26,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         <div style={{
           width: '36px', height: '36px', borderRadius: '10px',
           background: 'linear-gradient(135deg, #38bdf8, #6366f1)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <Zap size={22} color="#040914" />
         </div>
@@ -35,22 +40,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
+          const showDivider = item.section && item.section !== lastSection;
+          lastSection = item.section || lastSection;
+
           return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className="btn"
-              style={{
-                justifyContent: 'flex-start',
-                background: isActive ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-                color: isActive ? '#38bdf8' : '#94a3b8',
-                border: isActive ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid transparent',
-                padding: '0.75rem 1rem'
-              }}
-            >
-              <Icon size={18} />
-              <span>{item.label}</span>
-            </button>
+            <React.Fragment key={item.id}>
+              {showDivider && (
+                <div style={{
+                  fontSize: '0.68rem',
+                  fontWeight: '700',
+                  letterSpacing: '0.1em',
+                  color: '#334155',
+                  textTransform: 'uppercase',
+                  padding: '0.5rem 0.25rem 0.1rem',
+                  marginTop: '0.25rem',
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                }}>
+                  {item.section}
+                </div>
+              )}
+              <button
+                id={`nav-${item.id}`}
+                onClick={() => setActiveTab(item.id)}
+                className="btn"
+                style={{
+                  justifyContent: 'flex-start',
+                  background: isActive ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                  color: isActive ? '#38bdf8' : '#94a3b8',
+                  border: isActive ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid transparent',
+                  padding: '0.75rem 1rem',
+                }}
+              >
+                <Icon size={18} />
+                <span>{item.label}</span>
+              </button>
+            </React.Fragment>
           );
         })}
       </nav>

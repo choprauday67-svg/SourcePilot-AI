@@ -59,10 +59,14 @@ def test_register_and_login_flow():
     assert rfq_data["status"] == "draft"
     rfq_id = rfq_data["id"]
 
-    # 6. Approve RFQ
-    res_app = client.post(f"/api/v1/rfq/{rfq_id}/approve", headers=headers)
-    assert res_app.status_code == 200
-    assert res_app.json()["status"] == "approved"
+    # 6. Submit & Approve RFQ via Multi-Approver Workflow
+    res_sub = client.post(f"/api/v1/rfq/{rfq_id}/submit-for-approval", headers=headers)
+    assert res_sub.status_code == 200
+    res_step1 = client.post(f"/api/v1/rfq/{rfq_id}/approve-step", json={"step_number": 1}, headers=headers)
+    assert res_step1.status_code == 200
+    res_step2 = client.post(f"/api/v1/rfq/{rfq_id}/approve-step", json={"step_number": 2}, headers=headers)
+    assert res_step2.status_code == 200
+    assert res_step2.json()["status"] == "approved"
 
     # 7. Dispatch RFQ
     res_send = client.post(f"/api/v1/rfq/{rfq_id}/send", headers=headers)

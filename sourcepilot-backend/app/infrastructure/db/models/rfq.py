@@ -20,6 +20,25 @@ class RFQ(Base):
 
     requirement = relationship("ProcurementRequirement", back_populates="rfqs")
     dispatches = relationship("RFQDispatch", back_populates="rfq", cascade="all, delete-orphan")
+    approvals = relationship("RFQApproval", back_populates="rfq", cascade="all, delete-orphan")
+
+
+class RFQApproval(Base):
+    """Phase 3 — Multi-approver RFQ workflow approval record."""
+    __tablename__ = "rfq_approvals"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    rfq_id = Column(String, ForeignKey("rfqs.id"), nullable=False, index=True)
+    step_number = Column(Integer, default=1)
+    role_required = Column(String, default="approver")  # buyer, approver, admin, director
+    approver_id = Column(String, ForeignKey("users.id"), nullable=True)
+    status = Column(String, default="pending")  # pending, approved, rejected
+    comments = Column(Text, nullable=True)
+    decided_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    rfq = relationship("RFQ", back_populates="approvals")
+
 
 class RFQDispatch(Base):
     __tablename__ = "rfq_dispatches"

@@ -19,6 +19,7 @@ class QuotationResponse(BaseModel):
     id: str
     requirement_id: str
     supplier_id: str
+    supplier_name: Optional[str] = None
     rfq_dispatch_id: Optional[str] = None
     extracted_data: Dict[str, Any]
     extraction_confidence: float
@@ -32,8 +33,16 @@ class RecommendationResponse(BaseModel):
     requirement_id: str
     summary: str
     recommended_supplier_id: Optional[str] = None
+    awarded_supplier_id: Optional[str] = None
+    awarded_supplier_name: Optional[str] = None
+    awarded_at: Optional[datetime] = None
+    award_notes: Optional[str] = None
     comparison_matrix: Dict[str, Dict[str, Any]]
     generated_at: datetime
 
     class Config:
         from_attributes = True
+
+class AwardRequest(BaseModel):
+    supplier_id: str
+    notes: Optional[str] = None

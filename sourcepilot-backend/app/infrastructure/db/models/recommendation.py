@@ -11,8 +11,13 @@ class Recommendation(Base):
     requirement_id = Column(String, ForeignKey("procurement_requirements.id"), nullable=False, unique=True)
     summary = Column(Text, nullable=False) # AI Executive Summary Rationale
     recommended_supplier_id = Column(String, ForeignKey("suppliers.id"), nullable=True)
+    awarded_supplier_id = Column(String, ForeignKey("suppliers.id"), nullable=True)
+    awarded_at = Column(DateTime, nullable=True)
+    awarded_by_user_id = Column(String, ForeignKey("users.id"), nullable=True)
+    award_notes = Column(Text, nullable=True)
     comparison_matrix = Column(JSON, nullable=False) # Key metrics matrix comparing suppliers side-by-side
     generated_at = Column(DateTime, default=datetime.utcnow)
     generated_by_agent_version = Column(String, default="v1.0")
 
     requirement = relationship("ProcurementRequirement", back_populates="recommendation")
+    awarded_supplier = relationship("Supplier", foreign_keys=[awarded_supplier_id])

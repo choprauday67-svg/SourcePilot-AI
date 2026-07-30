@@ -4,6 +4,7 @@ from app.infrastructure.search_connectors.web_search_connector import WebSearchC
 from app.infrastructure.search_connectors.marketplace_connector import MarketplaceConnector
 from app.infrastructure.search_connectors.registry_connector import RegistryConnector
 from app.infrastructure.search_connectors.review_site_connector import ReviewSiteConnector
+from app.infrastructure.search_connectors.bing_search_connector import BingSearchConnector
 
 
 class ConnectorRegistry:
@@ -23,11 +24,9 @@ class ConnectorRegistry:
         return list(self._connectors.keys())
 
 
-# Phase 1: WebSearchConnector — live (Serper/Tavily) with mock fallback
-# Phase 2: MarketplaceConnector, RegistryConnector, ReviewSiteConnector — mock adapters
-#           ready to wire to real APIs via .env config (no business logic changes needed)
 connector_registry = ConnectorRegistry()
 connector_registry.register(WebSearchConnector())
 connector_registry.register(MarketplaceConnector())
 connector_registry.register(RegistryConnector())
 connector_registry.register(ReviewSiteConnector())
+connector_registry.register(BingSearchConnector())

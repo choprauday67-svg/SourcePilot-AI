@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, ShieldAlert, Search } from 'lucide-react';
+import { CheckCircle2, Search, Lock } from 'lucide-react';
 
 interface StructuredRequirementModalProps {
   requirement: any;
@@ -19,6 +19,42 @@ export const StructuredRequirementModal: React.FC<StructuredRequirementModalProp
   if (!isOpen || !requirement) return null;
 
   const data = requirement.structured_data || {};
+  const reqStatus = requirement.status || 'draft';
+  const isDraftOrConfirmed = reqStatus === 'draft' || reqStatus === 'confirmed';
+  const isAwarded = reqStatus === 'awarded';
+
+  const renderActionButton = () => {
+    if (isDraftOrConfirmed) {
+      return (
+        <button className="btn btn-primary" onClick={onConfirm} disabled={isDiscovering}>
+          <Search size={18} />
+          {isDiscovering ? 'Discovering Suppliers...' : 'Confirm & Discover Suppliers'}
+        </button>
+      );
+    }
+    if (isAwarded) {
+      return (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '0.5rem',
+          background: 'rgba(251, 191, 36, 0.15)', border: '1px solid rgba(251, 191, 36, 0.4)',
+          color: '#fbbf24', padding: '0.5rem 1rem', borderRadius: '8px',
+          fontWeight: '700', fontSize: '0.88rem'
+        }}>
+          <CheckCircle2 size={16} /> Procurement Awarded
+        </div>
+      );
+    }
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '0.5rem',
+        background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)',
+        color: '#38bdf8', padding: '0.5rem 1rem', borderRadius: '8px',
+        fontWeight: '600', fontSize: '0.88rem'
+      }}>
+        <Lock size={15} /> Supplier Discovery Completed
+      </div>
+    );
+  };
 
   return (
     <div className="modal-overlay">
@@ -28,11 +64,11 @@ export const StructuredRequirementModal: React.FC<StructuredRequirementModalProp
             <CheckCircle2 size={26} color="#38bdf8" />
             <h3 style={{ fontSize: '1.3rem' }}>AI Requirement Extraction Review</h3>
           </div>
-          <span className="badge badge-discovering">Status: {requirement.status}</span>
+          <span className="badge badge-discovering">Status: {reqStatus}</span>
         </div>
 
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-          SourcePilot's Requirement Understanding Agent converted your raw text into the following structured parameters. Please confirm before launching discovery.
+          SourcePilot's Requirement Understanding Agent converted your raw text into the following structured parameters.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.5rem' }}>
@@ -77,12 +113,9 @@ export const StructuredRequirementModal: React.FC<StructuredRequirementModalProp
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', alignItems: 'center' }}>
           <button className="btn btn-secondary" onClick={onClose}>Close</button>
-          <button className="btn btn-primary" onClick={onConfirm} disabled={isDiscovering}>
-            <Search size={18} />
-            {isDiscovering ? 'Discovering Suppliers...' : 'Confirm & Discover Suppliers'}
-          </button>
+          {renderActionButton()}
         </div>
       </div>
     </div>

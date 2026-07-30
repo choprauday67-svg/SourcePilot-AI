@@ -17,3 +17,4 @@ class Quotation(Base):
     received_at = Column(DateTime, default=datetime.utcnow)
 
     dispatch = relationship("RFQDispatch", back_populates="quotation")
+    supplier = relationship("Supplier")

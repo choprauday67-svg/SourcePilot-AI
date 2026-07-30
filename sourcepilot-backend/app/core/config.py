@@ -24,9 +24,10 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.5-flash"
     
     # Search Connectors
-    SEARCH_CONNECTOR_TYPE: str = "mock"  # "mock", "serper", "tavily"
+    SEARCH_CONNECTOR_TYPE: str = "mock"  # "mock", "serper", "tavily", "bing"
     SERPER_API_KEY: Optional[str] = os.getenv("SERPER_API_KEY", "")
     TAVILY_API_KEY: Optional[str] = os.getenv("TAVILY_API_KEY", "")
+    BING_SEARCH_API_KEY: Optional[str] = os.getenv("BING_SEARCH_API_KEY", "")
     
     # Phase 2 — Marketplace Connector (optional; mock if not set)
     MARKETPLACE_API_KEY: Optional[str] = os.getenv("MARKETPLACE_API_KEY", "")

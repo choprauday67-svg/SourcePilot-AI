@@ -83,6 +83,22 @@ class SupplierIntelligenceAgent(BaseAgent):
             f"Trust Score {trust_score}/100 based on multi-source signals."
         )
 
+        # --- Phase 3 Multi-Dimensional Risk Matrix ---
+        financial_risk_score = round(100.0 - (trust_score * 0.8), 1)
+        compliance_risk_score = 15.0 if "ISO 9001" in cert_str else 45.0
+        operational_risk_score = 20.0 if candidate.contact_email else 55.0
+        provenance_risk_score = 10.0 if candidate.source_connector == "trade_registry" else (
+            25.0 if candidate.source_connector in ("review_sites", "marketplace") else 40.0
+        )
+
+        overall_risk_score = round(
+            0.3 * financial_risk_score +
+            0.3 * compliance_risk_score +
+            0.2 * operational_risk_score +
+            0.2 * provenance_risk_score, 1
+        )
+        overall_risk_level = "Low Risk" if overall_risk_score < 30 else ("Medium Risk" if overall_risk_score < 55 else "High Risk")
+
         return {
             "trust_score": trust_score,
             "risk_flags": risk_flags,
@@ -90,4 +106,12 @@ class SupplierIntelligenceAgent(BaseAgent):
             "certifications": candidate.certifications,
             "source_connector": candidate.source_connector,
             "connector_bonus_applied": connector_bonus,
+            "risk_analysis": {
+                "financial_risk_score": financial_risk_score,
+                "compliance_risk_score": compliance_risk_score,
+                "operational_risk_score": operational_risk_score,
+                "provenance_risk_score": provenance_risk_score,
+                "overall_risk_score": overall_risk_score,
+                "overall_risk_level": overall_risk_level,
+            },
         }

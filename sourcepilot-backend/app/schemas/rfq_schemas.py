@@ -6,6 +6,28 @@ class RFQUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
 
+class RFQApprovalResponse(BaseModel):
+    id: str
+    rfq_id: str
+    step_number: int
+    role_required: str
+    approver_id: Optional[str] = None
+    status: str
+    comments: Optional[str] = None
+    decided_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ApproveStepRequest(BaseModel):
+    step_number: int
+    comments: Optional[str] = None
+
+class RejectStepRequest(BaseModel):
+    step_number: int
+    comments: str
+
 class RFQDispatchResponse(BaseModel):
     id: str
     supplier_id: str
@@ -27,6 +49,7 @@ class RFQResponse(BaseModel):
     approved_at: Optional[datetime] = None
     created_at: datetime
     dispatches: List[RFQDispatchResponse] = []
+    approvals: List[RFQApprovalResponse] = []
 
     class Config:
         from_attributes = True

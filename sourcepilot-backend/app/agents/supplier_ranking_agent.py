@@ -158,6 +158,8 @@ class SupplierRankingAgent(BaseAgent):
                 "source_connector": source_connector,
                 "provenance_bonus": provenance_bonus,
                 "category_weights_applied": weights,
+                "risk_analysis": profile.get("risk_analysis", {}),
+                "risk_flags": profile.get("risk_flags", []),
                 "score_components": {
                     "trust": round(weights["trust"] * trust_score, 2),
                     "certification": round(weights["certification"] * cert_score, 2),

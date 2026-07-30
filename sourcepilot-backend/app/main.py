@@ -33,6 +33,9 @@ from app.api.v1.routes_analytics import router as analytics_router
 from app.api.v1.routes_webhooks import router as webhooks_router
 from app.api.v1.routes_comments import router as comments_router
 from app.api.v1.routes_connectors import router as connectors_router
+# Phase 3
+from app.api.v1.routes_saved_suppliers import router as saved_suppliers_router
+from app.api.v1.routes_price_analytics import router as price_analytics_router
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(requirements_router, prefix=settings.API_V1_STR)
@@ -44,6 +47,9 @@ app.include_router(analytics_router, prefix=settings.API_V1_STR)
 app.include_router(webhooks_router, prefix=settings.API_V1_STR)
 app.include_router(comments_router, prefix=settings.API_V1_STR)
 app.include_router(connectors_router, prefix=settings.API_V1_STR)
+# Phase 3
+app.include_router(saved_suppliers_router, prefix=settings.API_V1_STR)
+app.include_router(price_analytics_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root():
