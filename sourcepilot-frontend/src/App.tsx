@@ -10,7 +10,7 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { CommentThread } from './components/CommentThread';
 import { SavedSupplierLibrary } from './components/SavedSupplierLibrary';
 import { MarketIntelligenceCard } from './components/MarketIntelligenceCard';
-import { Folder } from 'lucide-react';
+import { Folder, RefreshCw } from 'lucide-react';
 
 const API_BASE = '/api/v1';
 const STORAGE_TOKEN_KEY = 'sourcepilot_token';
@@ -43,6 +43,8 @@ export function App() {
   const [analytics, setAnalytics] = useState<any>(null);
 
   const [savedSupplierIds, setSavedSupplierIds] = useState<string[]>([]);
+  const [isSyncingMailbox, setIsSyncingMailbox] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
 
   const handleSetActiveTab = (tab: string) => {
     setActiveTab(tab);
@@ -61,13 +63,11 @@ export function App() {
 
   // ─── 1. Auth — register once, then login on subsequent loads ─
   useEffect(() => {
-    // If we already have a stored token, validate it is still alive
     if (token) {
       fetch(`${API_BASE}/requirements`, {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       }).then(r => {
         if (r.status === 401) {
-          // Token expired — re-login
           localStorage.removeItem(STORAGE_TOKEN_KEY);
           setToken(null);
         }
@@ -129,7 +129,6 @@ export function App() {
     if (!token || !reqId) return;
     localStorage.setItem(STORAGE_REQ_KEY, reqId);
 
-    // Fetch fresh requirement detail from API (not just the list snapshot)
     try {
       const rRes = await fetch(`${API_BASE}/requirements/${reqId}`, { headers: getHeaders() });
       if (rRes.ok) {
@@ -142,7 +141,6 @@ export function App() {
       if (reqObj) setCurrentRequirement(reqObj);
     }
 
-    // Ranked suppliers
     try {
       const supRes = await fetch(`${API_BASE}/requirements/${reqId}/suppliers`, { headers: getHeaders() });
       if (supRes.ok) {
@@ -157,7 +155,6 @@ export function App() {
       setRankedMatches([]);
     }
 
-    // RFQ & approvals
     try {
       const rfqRes = await fetch(`${API_BASE}/rfq/requirement/${reqId}`, { headers: getHeaders() });
       if (rfqRes.ok) {
@@ -169,7 +166,6 @@ export function App() {
       setRfq(null);
     }
 
-    // Quotations + recommendation
     try {
       const qRes = await fetch(`${API_BASE}/quotations/requirement/${reqId}`, { headers: getHeaders() });
       if (qRes.ok) {
@@ -221,7 +217,32 @@ export function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // ─── 5. Requirement Submission ──────────────────────────────
+  // ─── 5. Sync Mailbox Replies ───────────────────────────────
+  const handleSyncMailboxReplies = async () => {
+    if (!token) return;
+    setIsSyncingMailbox(true);
+    setSyncStatusMsg(null);
+    try {
+      const res = await fetch(`${API_BASE}/email-drafts/sync-replies`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSyncStatusMsg(`Synced ${data.synced_messages_count} reply message(s) -> extracted ${data.quotations_extracted_count} quotation(s).`);
+        if (currentRequirement?.id) {
+          loadRequirementState(currentRequirement.id);
+        }
+      }
+    } catch (err) {
+      console.error('Mailbox sync error:', err);
+    } finally {
+      setIsSyncingMailbox(false);
+      setTimeout(() => setSyncStatusMsg(null), 5000);
+    }
+  };
+
+  // ─── 6. Requirement Submission ──────────────────────────────
   const handleRequirementSubmit = async (rawText: string) => {
     if (!token) return;
     setIsExtracting(true);
@@ -236,7 +257,6 @@ export function App() {
         setCurrentRequirement(newReq);
         setRequirementsList(prev => [newReq, ...prev]);
         localStorage.setItem(STORAGE_REQ_KEY, newReq.id);
-        // Reset downstream state for new requirement
         setRankedMatches([]);
         setRfq(null);
         setQuotations([]);
@@ -247,7 +267,7 @@ export function App() {
     finally { setIsExtracting(false); }
   };
 
-  // ─── 6. Confirm Discovery ──────────────────────────────────
+  // ─── 7. Confirm Discovery ──────────────────────────────────
   const handleConfirmDiscovery = async () => {
     if (!currentRequirement || !token) return;
     setIsDiscovering(true);
@@ -271,7 +291,7 @@ export function App() {
     finally { setIsDiscovering(false); }
   };
 
-  // ─── 7. Supplier Select & Save/Bookmark ────────────────────
+  // ─── 8. Supplier Select & Save/Bookmark ────────────────────
   const handleToggleSupplierSelect = (supplierId: string) =>
     setSelectedSupplierIds(prev =>
       prev.includes(supplierId) ? prev.filter(id => id !== supplierId) : [...prev, supplierId]
@@ -281,7 +301,6 @@ export function App() {
     if (!token) return;
     const isSaved = savedSupplierIds.includes(supplierId);
     if (isSaved) {
-      // Optimistic unsave
       setSavedSupplierIds(prev => prev.filter(id => id !== supplierId));
       try {
         const res = await fetch(`${API_BASE}/saved-suppliers/${supplierId}`, {
@@ -291,14 +310,12 @@ export function App() {
         if (res.ok || res.status === 204) {
           fetchSavedSuppliers();
         } else {
-          // Revert optimistic change on failure
           setSavedSupplierIds(prev => [...prev, supplierId]);
         }
       } catch {
         setSavedSupplierIds(prev => [...prev, supplierId]);
       }
     } else {
-      // Optimistic save
       setSavedSupplierIds(prev => [...prev, supplierId]);
       const cat = currentRequirement?.structured_data?.category
         || currentRequirement?.category
@@ -317,7 +334,6 @@ export function App() {
         if (res.ok || res.status === 201) {
           fetchSavedSuppliers();
         } else {
-          // Revert optimistic change on failure
           setSavedSupplierIds(prev => prev.filter(id => id !== supplierId));
         }
       } catch {
@@ -326,10 +342,9 @@ export function App() {
     }
   };
 
-  // ─── 8. Generate / View RFQ (Lifecycle-Aware) ─────────────
+  // ─── 9. Generate / View RFQ (Lifecycle-Aware) ─────────────
   const handleGenerateRFQ = async () => {
     if (!currentRequirement || !token) return;
-    // If an RFQ document already exists for this requirement, switch to RFQ tab directly
     if (rfq) {
       handleSetActiveTab('rfq');
       return;
@@ -360,7 +375,7 @@ export function App() {
     return 'View RFQ Draft';
   };
 
-  // ─── 9. RFQ Status Change ──────────────────────────────────
+  // ─── 10. RFQ Status Change ──────────────────────────────────
   const handleRFQStatusChange = (newStatus: string) => {
     setRfq((prev: any) => prev ? { ...prev, status: newStatus } : prev);
     setCurrentRequirement((prev: any) => prev ? { ...prev, status: newStatus } : prev);
@@ -369,7 +384,7 @@ export function App() {
     );
   };
 
-  // ─── 10. Send RFQ ──────────────────────────────────────────
+  // ─── 11. Send RFQ ──────────────────────────────────────────
   const handleSendRFQ = async (rfqId: string) => {
     setIsSendingRFQ(true);
     try {
@@ -381,7 +396,6 @@ export function App() {
         setRfq((prev: any) => ({ ...prev, status: 'sent' }));
         setCurrentRequirement((prev: any) => ({ ...prev, status: 'rfq_sent' }));
 
-        // Create an initial quotation for the top-ranked supplier (demo flow)
         if (rankedMatches.length > 0 && currentRequirement) {
           const supId = rankedMatches[0].supplier?.id;
           if (supId) {
@@ -423,7 +437,7 @@ export function App() {
     finally { setIsSendingRFQ(false); }
   };
 
-  // ─── 11. Award Supplier ────────────────────────────────────
+  // ─── 12. Award Supplier ────────────────────────────────────
   const handleAwardSupplier = async (supplierId: string, notes: string) => {
     if (!currentRequirement || !token) return;
     const res = await fetch(`${API_BASE}/quotations/award/${currentRequirement.id}`, {
@@ -441,7 +455,7 @@ export function App() {
     }
   };
 
-  // ─── 12. Analytics ─────────────────────────────────────────
+  // ─── 13. Analytics ─────────────────────────────────────────
   useEffect(() => {
     if (activeTab === 'analytics' && token) {
       fetch(`${API_BASE}/analytics/summary`, { headers: getHeaders() })
@@ -476,35 +490,57 @@ export function App() {
             </p>
           </div>
 
-          {requirementsList.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <Folder size={15} color="#38bdf8" /> Active:
-              </span>
-              <select
-                value={currentRequirement?.id || ''}
-                onChange={e => loadRequirementState(e.target.value)}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  color: '#f8fafc',
-                  padding: '0.45rem 0.75rem',
-                  fontSize: '0.85rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  maxWidth: '300px',
-                }}
-              >
-                {requirementsList.map((r: any) => (
-                  <option key={r.id} value={r.id} style={{ background: '#0b1120', color: '#f8fafc' }}>
-                    {r.title} [{r.status}]
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '0.45rem 0.75rem' }}
+              onClick={handleSyncMailboxReplies}
+              disabled={isSyncingMailbox}
+              title="Sync unread supplier email replies from connected mailboxes"
+            >
+              <RefreshCw size={14} className={isSyncingMailbox ? 'spin' : ''} />
+              {isSyncingMailbox ? 'Syncing Inbox…' : 'Sync Mailbox Replies'}
+            </button>
+
+            {requirementsList.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <Folder size={15} color="#38bdf8" /> Active:
+                </span>
+                <select
+                  value={currentRequirement?.id || ''}
+                  onChange={e => loadRequirementState(e.target.value)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    color: '#f8fafc',
+                    padding: '0.45rem 0.75rem',
+                    fontSize: '0.85rem',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    maxWidth: '260px',
+                  }}
+                >
+                  {requirementsList.map((r: any) => (
+                    <option key={r.id} value={r.id} style={{ background: '#0b1120', color: '#f8fafc' }}>
+                      {r.title} [{r.status}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         </header>
+
+        {syncStatusMsg && (
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)',
+            borderRadius: '8px', padding: '0.6rem 1rem', color: '#10b981', margin: '0 0 1rem 0', fontSize: '0.85rem'
+          }}>
+            {syncStatusMsg}
+          </div>
+        )}
 
         {/* ── Tab: Requirements ── */}
         {activeTab === 'requirements' && (

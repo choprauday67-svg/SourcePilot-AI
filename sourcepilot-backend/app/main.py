@@ -36,6 +36,9 @@ from app.api.v1.routes_connectors import router as connectors_router
 # Phase 3
 from app.api.v1.routes_saved_suppliers import router as saved_suppliers_router
 from app.api.v1.routes_price_analytics import router as price_analytics_router
+# Phase 4
+from app.api.v1.routes_connected_accounts import router as connected_accounts_router
+from app.api.v1.routes_email_drafts import router as email_drafts_router
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(requirements_router, prefix=settings.API_V1_STR)
@@ -50,6 +53,9 @@ app.include_router(connectors_router, prefix=settings.API_V1_STR)
 # Phase 3
 app.include_router(saved_suppliers_router, prefix=settings.API_V1_STR)
 app.include_router(price_analytics_router, prefix=settings.API_V1_STR)
+# Phase 4
+app.include_router(connected_accounts_router, prefix=settings.API_V1_STR)
+app.include_router(email_drafts_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root():

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Send, FileCode, Edit3 } from 'lucide-react';
+import { Send, FileCode, Edit3, MailCheck } from 'lucide-react';
 import { ApprovalWorkflow } from './ApprovalWorkflow';
+import { EmailDraftingModal } from './EmailDraftingModal';
+import { ConnectedAccountsManager } from './ConnectedAccountsManager';
 
 interface RFQEditorProps {
   rfq: any;
@@ -17,34 +19,17 @@ function markdownToHtml(md: string): string {
   if (!md) return '';
 
   let html = md
-    // Headings (### → h3, ## → h2, # → h1)
     .replace(/^### (.+)$/gm, '<h3 style="font-size:1rem;color:#a5b4fc;margin:1rem 0 0.3rem">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 style="font-size:1.1rem;color:#c4b5fd;margin:1.2rem 0 0.4rem">$1</h2>')
     .replace(/^# (.+)$/gm, '<h1 style="font-size:1.25rem;color:#f8fafc;margin:1.4rem 0 0.5rem">$1</h1>')
-
-    // Horizontal rule
     .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.1);margin:1rem 0"/>')
-
-    // Bold + italic combinations
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-    // Bold
     .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#f8fafc">$1</strong>')
-    // Italic
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-
-    // Inline code
     .replace(/`(.+?)`/g, '<code style="background:rgba(139,92,246,0.2);color:#c4b5fd;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.88em">$1</code>')
-
-    // Bullet list items
     .replace(/^[\-\*] (.+)$/gm, '<li style="margin:0.2rem 0 0.2rem 1rem;list-style:disc">$1</li>')
-
-    // Numbered list items
     .replace(/^\d+\. (.+)$/gm, '<li style="margin:0.2rem 0 0.2rem 1rem;list-style:decimal">$1</li>')
-
-    // Wrap consecutive <li> in <ul>
     .replace(/((?:<li[^>]*>.*<\/li>\n?)+)/g, '<ul style="padding-left:1rem;margin:0.5rem 0">$1</ul>')
-
-    // Double line-breaks → paragraph separators
     .replace(/\n{2,}/g, '<br/><br/>');
 
   return html;
@@ -64,6 +49,7 @@ export const RFQEditor: React.FC<RFQEditorProps> = ({
   const [content, setContent] = useState(rfq.content || '');
   const [isEditing, setIsEditing] = useState(false);
   const [rfqStatus, setRfqStatus] = useState(rfq.status);
+  const [isDraftModalOpen, setIsDraftModalOpen] = useState(false);
 
   useEffect(() => {
     if (rfq?.status) setRfqStatus(rfq.status);
@@ -96,6 +82,9 @@ export const RFQEditor: React.FC<RFQEditorProps> = ({
 
   return (
     <div>
+      {/* Connected Accounts Mailbox Banner */}
+      <ConnectedAccountsManager token={token} />
+
       {/* Multi-Approver Workflow Panel */}
       <ApprovalWorkflow
         rfq={rfq}
@@ -141,14 +130,13 @@ export const RFQEditor: React.FC<RFQEditorProps> = ({
               </button>
             )}
 
-            {rfqStatus === 'approved' && (
+            {(rfqStatus === 'approved' || rfqStatus === 'sent') && (
               <button
                 id="dispatch-rfq-btn"
                 className="btn btn-primary anim-pulse"
-                onClick={() => onSend(rfq.id)}
-                disabled={isSending}
+                onClick={() => setIsDraftModalOpen(true)}
               >
-                <Send size={18} /> {isSending ? 'Dispatching…' : 'Dispatch to Selected Suppliers'}
+                <MailCheck size={18} /> Review Email Drafts & Approve Dispatch
               </button>
             )}
           </div>
@@ -185,6 +173,15 @@ export const RFQEditor: React.FC<RFQEditorProps> = ({
           />
         )}
       </div>
+
+      {/* Human Approval Email Drafting Modal */}
+      <EmailDraftingModal
+        rfq={rfq}
+        isOpen={isDraftModalOpen}
+        token={token}
+        onClose={() => setIsDraftModalOpen(false)}
+        onDispatchComplete={() => handleStatusChange('sent')}
+      />
     </div>
   );
 };

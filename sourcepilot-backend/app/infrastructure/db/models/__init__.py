@@ -9,6 +9,8 @@ from app.infrastructure.db.models.recommendation import Recommendation
 from app.infrastructure.db.models.audit import AuditLog
 from app.infrastructure.db.models.comment import RequirementComment  # Phase 2
 from app.infrastructure.db.models.saved_supplier import SavedSupplier  # Phase 3
+from app.infrastructure.db.models.connected_account import ConnectedAccount  # Phase 4
+from app.infrastructure.db.models.email_draft import EmailDraft  # Phase 4
 
 __all__ = [
     "Organization",
@@ -25,4 +27,6 @@ __all__ = [
     "AuditLog",
     "RequirementComment",  # Phase 2
     "SavedSupplier",       # Phase 3
+    "ConnectedAccount",    # Phase 4
+    "EmailDraft",          # Phase 4
 ]
