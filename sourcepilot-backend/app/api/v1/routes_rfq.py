@@ -105,6 +105,8 @@ def update_rfq(
         rfq.title = update_data.title
     if update_data.content:
         rfq.content = update_data.content
+
+    if update_data.title or update_data.content:
         rfq.version += 1
 
     db.commit()

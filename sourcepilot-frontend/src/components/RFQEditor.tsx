@@ -58,12 +58,12 @@ export const RFQEditor: React.FC<RFQEditorProps> = ({
   useEffect(() => {
     setContent(rfq.content || '');
     setTitle(rfq.title || '');
-  }, [rfq.id]);
+  }, [rfq.id, rfq.version]);
 
   const renderedHtml = useMemo(() => markdownToHtml(content), [content]);
 
-  const handleSave = () => {
-    onUpdate(rfq.id, title, content);
+  const handleSave = async () => {
+    await onUpdate(rfq.id, title, content);
     setIsEditing(false);
   };
 

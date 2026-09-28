@@ -25,7 +25,7 @@ class SupplierContact(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     supplier_id = Column(String, ForeignKey("suppliers.id"), nullable=False)
-    email = Column(String, nullable=False)
+    email = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     contact_name = Column(String, nullable=True)
     is_primary = Column(Boolean, default=True)

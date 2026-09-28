@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ShieldCheck,
   ChevronDown,
   ChevronUp,
   Globe,
@@ -121,16 +120,6 @@ export const SupplierCard: React.FC<SupplierCardProps> = ({
         </div>
 
         <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <ShieldCheck size={20} color="#10b981" />
-              <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#10b981' }}>
-                {explanation.trust_score || 90}% Trust Score
-              </span>
-            </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Verified B2B Vendor</div>
-          </div>
-
           {/* Bookmark / Save Supplier Button */}
           {onToggleSave && (
             <button
@@ -280,10 +269,11 @@ export const SupplierCard: React.FC<SupplierCardProps> = ({
             {explanation.summary}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', color: 'var(--text-muted)' }}>
-            <div><strong>Price Fit:</strong> {explanation.price_fit}</div>
-            <div><strong>Certification Match:</strong> {explanation.certification_match}</div>
-            <div><strong>Estimated Lead Time:</strong> {explanation.lead_time}</div>
-            <div><strong>Connector Verification:</strong> {explanation.source_connector || 'Web Connector'}</div>
+            <div><strong>Spec Match (35%):</strong> {explanation.product_spec_match || '70.0/100 (Neutral Baseline)'}</div>
+            <div><strong>Certification (25%):</strong> {explanation.certification_match || '70.0/100 (Neutral Baseline)'}</div>
+            <div><strong>Geographic (15%):</strong> {explanation.geographic_suitability || '70.0/100 (Neutral Baseline)'}</div>
+            <div><strong>Contact Feasibility (15%):</strong> {explanation.contact_feasibility || '70.0/100 (Neutral Baseline)'}</div>
+            <div style={{ gridColumn: 'span 2' }}><strong>Source/Data Quality (10%):</strong> {explanation.source_data_quality || '70.0/100 (Neutral Baseline)'}</div>
           </div>
         </div>
       )}

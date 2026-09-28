@@ -51,14 +51,8 @@ export const ConnectedAccountsManager: React.FC<ConnectedAccountsManagerProps> =
       });
       if (res.ok) {
         const data = await res.json();
-        // Execute callback to simulate OAuth completion
-        const callbackRes = await fetch(`${API_BASE}/connected-accounts/oauth/callback/${provider}`, {
-          method: 'POST',
-          headers: getHeaders(),
-          body: JSON.stringify({ code: 'auth_code_demo', state: data.state }),
-        });
-        if (callbackRes.ok) {
-          await fetchAccounts();
+        if (data.authorization_url) {
+          window.location.href = data.authorization_url;
         }
       }
     } catch (err) {

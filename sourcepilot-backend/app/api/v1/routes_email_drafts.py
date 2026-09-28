@@ -34,6 +34,30 @@ from app.infrastructure.email.mailtrap_provider import MailtrapProvider
 router = APIRouter(prefix="/email-drafts", tags=["Email Drafts & Dispatch"])
 
 
+def resolve_supplier_email(db: Session, supplier_id: str) -> str:
+    """Helper to reliably retrieve or construct contact email for a supplier."""
+    sup = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    contact = db.query(SupplierContact).filter(
+        SupplierContact.supplier_id == supplier_id,
+        SupplierContact.email != None,
+        SupplierContact.email != ""
+    ).first()
+
+    if contact and contact.email and contact.email.strip():
+        return contact.email.strip()
+
+    if sup and sup.canonical_domain:
+        domain = sup.canonical_domain.replace("http://", "").replace("https://", "").strip("/")
+        return f"sales@{domain}"
+
+    if sup and sup.company_name:
+        import re
+        sanitized = re.sub(r'[^a-zA-Z0-9]', '', sup.company_name.lower())
+        return f"sales@{sanitized}.com"
+
+    return "sales@supplier.com"
+
+
 @router.get("/rfq/{rfq_id}", response_model=List[EmailDraftResponse])
 def list_email_drafts_for_rfq(
     rfq_id: str,
@@ -49,6 +73,20 @@ def list_email_drafts_for_rfq(
     results = []
     for d in drafts:
         sup = db.query(Supplier).filter(Supplier.id == d.supplier_id).first()
+        if not d.recipient_email or not d.recipient_email.strip():
+            d.recipient_email = resolve_supplier_email(db, d.supplier_id)
+            db.commit()
+            db.refresh(d)
+
+        import re
+        if d.subject:
+            clean_sub = re.sub(r'(?i)\s*(?:by|-|\(|\b)\s*Uday\s+Chopra.*$', '', d.subject)
+            clean_sub = clean_sub.replace("Request for Quotation (RFQ) - ", "").replace("Request for Quotation (RFQ)-", "")
+            if clean_sub != d.subject:
+                d.subject = clean_sub
+                db.commit()
+                db.refresh(d)
+
         res = EmailDraftResponse.model_validate(d)
         res.supplier_name = sup.company_name if sup else "Supplier"
         results.append(res)
@@ -104,14 +142,17 @@ async def generate_email_drafts_for_rfq(
 
         if existing:
             sup = db.query(Supplier).filter(Supplier.id == existing.supplier_id).first()
+            if not existing.recipient_email or not existing.recipient_email.strip():
+                existing.recipient_email = resolve_supplier_email(db, existing.supplier_id)
+                db.commit()
+                db.refresh(existing)
             res = EmailDraftResponse.model_validate(existing)
             res.supplier_name = sup.company_name if sup else "Supplier"
             created_drafts.append(res)
             continue
 
         sup = db.query(Supplier).filter(Supplier.id == disp.supplier_id).first()
-        contact = db.query(SupplierContact).filter(SupplierContact.supplier_id == disp.supplier_id).first()
-        target_email = contact.email if contact else f"sales@{sup.canonical_domain if sup else 'supplier.com'}"
+        target_email = resolve_supplier_email(db, disp.supplier_id)
         target_name = sup.company_name if sup else "Sales Team"
 
         proposal = await orchestrator.email_automation_agent.execute(
@@ -313,17 +354,25 @@ async def sync_inbox_replies(
                     "thread_id": f"thread_{sd.rfq_id[:8]}",
                     "from_email": sd.recipient_email,
                     "subject": f"Re: {sd.subject}",
-                    "body_text": (
-                        f"Formal Quotation for {sd.subject}:\n"
-                        "Unit Price: $28.50\n"
-                        "Total Price: $14,250.00\n"
-                        "Lead Time: 14 days\n"
-                        "MOQ: 100 units\n"
-                        "Payment Terms: Net 30\n"
-                        "Warranty: 1 Year\n"
-                        "We look forward to working with your team."
-                    ),
-                    "attachments": [],
+                    "body_text": f"Please find attached formal quotation document for {sd.subject}.",
+                    "attachments": [
+                        {
+                            "filename": f"Supplier_Quotation_{sd.supplier_id[:6]}.pdf",
+                            "content_type": "application/pdf",
+                            "text_content": (
+                                "SUPPLIER QUOTATION SHEET (PDF/XLSX Attachment)\n"
+                                "Supplier Name: Precision Electronics & Machinery Solutions Ltd.\n"
+                                "Item: Brushless DC Motor\n"
+                                "Unit Price: $24.50\n"
+                                "Quantity: 500 units\n"
+                                "Total Price: $12,250.00\n"
+                                "Lead Time: 14 days\n"
+                                "MOQ: 100 units\n"
+                                "Payment Terms: Net 30\n"
+                                "Warranty: 1-Year Manufacturer Warranty"
+                            ),
+                        }
+                    ],
                     "received_at": datetime.utcnow().isoformat(),
                 })
 
@@ -351,9 +400,23 @@ async def sync_inbox_replies(
             if not req_match:
                 continue
 
-            body_text = rep.get("body_text") or "Quotation response: unit price $24.50, total $12,250.00, MOQ 100 units, lead time 14 days, Net 30."
+            body_text = rep.get("body_text", "")
+            att_texts = []
+            for att in rep.get("attachments", []):
+                fname = att.get("filename", "attachment")
+                text = att.get("text_content", "") or att.get("content", "")
+                if text:
+                    att_texts.append(f"--- Attachment ({fname}) ---\n{text}")
+
+            full_quote_text = body_text
+            if att_texts:
+                full_quote_text += "\n\n" + "\n\n".join(att_texts)
+
+            if not full_quote_text.strip():
+                continue
+
             extraction = await orchestrator.quotation_extraction_agent.execute(
-                email_body=body_text
+                email_body=full_quote_text
             )
 
             existing_quote = db.query(Quotation).filter(

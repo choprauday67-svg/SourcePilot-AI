@@ -186,3 +186,86 @@ def test_inbound_email_webhook():
     assert res_json["received"] is True
     assert "quotation_id" in res_json
     assert res_json["quotation_id"] is not None
+
+
+@pytest.mark.asyncio
+async def test_deterministic_procurement_ranking_engine():
+    """Verify deterministic ranking engine: hard constraints, neutral baseline, 5-factor weights, tie-breaking."""
+    from app.agents.supplier_ranking_agent import SupplierRankingAgent
+    from app.schemas.agent_io_schemas import RequirementExtractionOutput
+
+    agent = SupplierRankingAgent()
+    requirement = RequirementExtractionOutput(
+        product="IP65 waterproof DC motor",
+        category="Electronics",
+        quantity=500,
+        unit="units",
+        specifications=["IP65", "waterproof", "DC motor"],
+        delivery_location="India",
+        must_have_certifications=["ISO 9001"],
+    )
+
+    suppliers = [
+        # Candidate 1: Apex Motors India - Top Match
+        {
+            "id": "sup-1",
+            "company_name": "Apex Motors India Ltd.",
+            "canonical_domain": "apexdynamics.in",
+            "profile": {
+                "summary": "Apex Motors is a manufacturer of IP65 waterproof DC motor in India. Certified ISO 9001.",
+                "certifications": ["ISO 9001"],
+                "country": "India",
+                "email": "contact@apexdynamics.in",
+                "source_connector": "trade_registry",
+            },
+        },
+        # Candidate 2: Irrelevant domain - Should be hard-constrained out
+        {
+            "id": "sup-2",
+            "company_name": "DC Motor Discussion Forum",
+            "canonical_domain": "wikipedia.org",
+            "profile": {
+                "summary": "Wikipedia page about IP65 waterproof DC motor specifications.",
+                "certifications": [],
+                "source_connector": "web_search",
+            },
+        },
+        # Candidate 3: Foreign supplier with missing email - Neutral baseline for missing data
+        {
+            "id": "sup-3",
+            "company_name": "Global Motor Supplies",
+            "canonical_domain": "globalmotors.com",
+            "profile": {
+                "summary": "Supplier of IP65 waterproof DC motor units based in USA.",
+                "certifications": [],
+                "country": "USA",
+                "source_connector": "web_search",
+            },
+        },
+    ]
+
+    result = await agent.execute(requirement, suppliers)
+    rankings = result.rankings
+
+    assert len(rankings) == 2, "wikipedia.org candidate should be filtered out by hard constraints"
+
+    top_rank = rankings[0]
+    assert top_rank.supplier_id == "sup-1"
+    assert top_rank.rank_score > 90.0
+
+    exp = top_rank.rank_explanation
+    assert "product_spec_match" in exp
+    assert "certification_match" in exp
+    assert "geographic_suitability" in exp
+    assert "contact_feasibility" in exp
+    assert "source_data_quality" in exp
+    assert "score_components" in exp
+    assert "data_flags" in exp
+
+    second_rank = rankings[1]
+    assert second_rank.supplier_id == "sup-3"
+    # Verify neutral 70.0 score applied for missing email and unmentioned certs
+    exp_2 = second_rank.rank_explanation
+    assert "70.0" in exp_2["certification_match"]
+    assert "70.0" in exp_2["contact_feasibility"]
+

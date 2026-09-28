@@ -1,11 +1,64 @@
 import json
+import re
 import httpx
 from typing import Type, TypeVar, Optional
 from pydantic import BaseModel
 from app.infrastructure.ai_providers.base import AIProvider
 from app.core.config import settings
+from app.infrastructure.email.attachment_parser import parse_quotation_text_fields
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def _parse_requirement_fallback(prompt: str) -> dict:
+    """Dynamically parse requirement prompt attributes for offline/test fallback."""
+    raw_text = prompt
+    if "Procurement Request:" in prompt:
+        raw_text = prompt.split("Procurement Request:", 1)[-1].strip().strip('"')
+
+    defaults = {
+        "product": "Industrial Brushless DC Motors",
+        "category": "Electronics & Machinery",
+        "quantity": 500,
+        "unit": "units",
+        "specifications": ["24V DC", "Peak Torque 1.5 Nm", "IP65 Waterproof rating"],
+        "budget_range": {"min": 10000, "max": 15000, "currency": "USD"},
+        "delivery_location": "Global",
+        "timeline": "3 weeks",
+        "must_have_certifications": ["ISO 9001:2015", "CE Certified"]
+    }
+
+    # Extract location (e.g. "delivered to Austin, TX", "in India", "location: Germany")
+    loc_match = re.search(
+        r"(?:delivered\s+to|delivery\s+to|in|to|at|for|location:?)\s+([A-Z][a-zA-Z0-9\s,\.-]+)",
+        raw_text,
+        re.IGNORECASE
+    )
+    if loc_match:
+        raw_loc = loc_match.group(1).strip()
+        # Truncate at common clause separators (within, with, delivery, budget, iso, cert, etc.)
+        cleaned_loc = re.split(
+            r"\s+(?:within|with|delivery|budget|iso|ce|cert|specs|qty|quantity|\.)\b",
+            raw_loc,
+            flags=re.IGNORECASE
+        )[0].strip().rstrip(",.")
+        
+        stopwords = {"delivery", "within", "the", "a", "an", "stock", "bulk", "industrial"}
+        if cleaned_loc and cleaned_loc.lower().split()[0] not in stopwords and len(cleaned_loc) >= 2:
+            defaults["delivery_location"] = cleaned_loc
+
+    # Extract quantity if present
+    qty_match = re.search(r"\b(\d{1,7})\b", raw_text)
+    if qty_match:
+        defaults["quantity"] = int(qty_match.group(1))
+
+    # Extract timeline if present
+    timeline_match = re.search(r"(?:within|in)\s+(\d+\s*(?:days?|weeks?|months?))", raw_text, re.IGNORECASE)
+    if timeline_match:
+        defaults["timeline"] = timeline_match.group(1).strip()
+
+    return defaults
+
 
 class GeminiProvider(AIProvider):
     def __init__(self, api_key: Optional[str] = None):
@@ -39,7 +92,7 @@ class GeminiProvider(AIProvider):
             except Exception:
                 pass
 
-        # Fallback heuristic / mock generator when Gemini key is missing or call fails
+        # Intelligent fallback generator when Gemini key is missing or call fails
         return self._generate_fallback(prompt, schema)
 
     async def generate_text(self, prompt: str, system_instruction: Optional[str] = None) -> str:
@@ -61,17 +114,7 @@ class GeminiProvider(AIProvider):
         defaults = {}
 
         if schema_name == "RequirementExtractionOutput":
-            defaults = {
-                "product": "Industrial Brushless DC Motors",
-                "category": "Electronics & Machinery",
-                "quantity": 500,
-                "unit": "units",
-                "specifications": ["24V DC", "Peak Torque 1.5 Nm", "IP65 Waterproof rating"],
-                "budget_range": {"min": 10000, "max": 15000, "currency": "USD"},
-                "delivery_location": "Austin, TX",
-                "timeline": "3 weeks",
-                "must_have_certifications": ["ISO 9001:2015", "CE Certified"]
-            }
+            defaults = _parse_requirement_fallback(prompt)
         elif schema_name == "SupplierRankingOutput":
             defaults = {
                 "rankings": [
@@ -88,17 +131,12 @@ class GeminiProvider(AIProvider):
                 ]
             }
         elif schema_name == "QuotationExtractionOutput":
-            defaults = {
-                "unit_price": 24.50,
-                "total_price": 12250.0,
-                "currency": "USD",
-                "moq": "100 units",
-                "lead_time_days": 14,
-                "validity_period": "30 days",
-                "payment_terms": "Net 30",
-                "notes": "Includes standard 1-year manufacturer warranty.",
-                "confidence_score": 0.95
-            }
+            try:
+                defaults = parse_quotation_text_fields(prompt)
+            except ValueError:
+                # If prompt text has no parseable financial numbers, raise error instead of returning fake defaults
+                raise ValueError("Could not extract financial quotation numbers (unit_price/total_price) from document text.")
+
         elif schema_name == "RecommendationOutput":
             defaults = {
                 "summary": "We recommend Apex Industrial Solutions as the primary supplier. Their quote of $12,250 comes in 18% under budget with guaranteed ISO 9001 compliance and 14-day lead time.",
@@ -112,10 +150,5 @@ class GeminiProvider(AIProvider):
         # Attempt generic Pydantic instantiation fallback
         try:
             return schema.model_validate(defaults)
-        except Exception:
-            # Construct empty/minimal model if schema doesn't match predefined defaults
-            fields = schema.model_fields
-            gen_fields = {}
-            for fname, fval in fields.items():
-                gen_fields[fname] = defaults.get(fname, "")
-            return schema.model_validate(gen_fields)
+        except Exception as err:
+            raise ValueError(f"Quotation extraction failed: {err}")

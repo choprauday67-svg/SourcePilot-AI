@@ -34,6 +34,8 @@ export function App() {
   const [rankedMatches, setRankedMatches] = useState<any[]>([]);
   const [selectedSupplierIds, setSelectedSupplierIds] = useState<string[]>([]);
   const [isDiscovering, setIsDiscovering] = useState(false);
+  const [isReranking, setIsReranking] = useState(false);
+
 
   const [rfq, setRfq] = useState<any>(null);
   const [isSendingRFQ, setIsSendingRFQ] = useState(false);
@@ -123,6 +125,26 @@ export function App() {
       console.error('Saved suppliers fetch error:', err);
     }
   }, [token]);
+
+  // ─── 2b. Handle OAuth Redirect Callback ─────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    if (code && state && token) {
+      const provider = window.location.pathname.includes('outlook') ? 'outlook' : 'gmail';
+      fetch(`${API_BASE}/connected-accounts/oauth/callback/${provider}`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ code, state }),
+      })
+        .then(res => res.ok ? res.json() : null)
+        .then(() => {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        })
+        .catch(err => console.error('OAuth callback error:', err));
+    }
+  }, [token, getHeaders]);
 
   // ─── 3. Load All Data for Active Requirement ───────────────
   const loadRequirementState = useCallback(async (reqId: string, reqObj?: any) => {
@@ -291,6 +313,27 @@ export function App() {
     finally { setIsDiscovering(false); }
   };
 
+  // ─── 7b. Re-rank Existing Suppliers (Database Only) ────────
+  const handleRerankSuppliers = async () => {
+    if (!currentRequirement || !token) return;
+    setIsReranking(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/requirements/${currentRequirement.id}/suppliers/rerank`,
+        { method: 'POST', headers: getHeaders() }
+      );
+      if (res.ok) {
+        const matches = await res.json();
+        setRankedMatches(matches);
+      }
+    } catch (err) {
+      console.error('Re-rank error:', err);
+    } finally {
+      setIsReranking(false);
+    }
+  };
+
+
   // ─── 8. Supplier Select & Save/Bookmark ────────────────────
   const handleToggleSupplierSelect = (supplierId: string) =>
     setSelectedSupplierIds(prev =>
@@ -375,7 +418,7 @@ export function App() {
     return 'View RFQ Draft';
   };
 
-  // ─── 10. RFQ Status Change ──────────────────────────────────
+  // ─── 10. RFQ Status Change & Revisions ──────────────────────
   const handleRFQStatusChange = (newStatus: string) => {
     setRfq((prev: any) => prev ? { ...prev, status: newStatus } : prev);
     setCurrentRequirement((prev: any) => prev ? { ...prev, status: newStatus } : prev);
@@ -383,6 +426,24 @@ export function App() {
       prev.map(r => r.id === currentRequirement?.id ? { ...r, status: newStatus } : r)
     );
   };
+
+  const handleUpdateRFQ = async (rfqId: string, updatedTitle: string, updatedContent: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/rfq/${rfqId}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ title: updatedTitle, content: updatedContent }),
+      });
+      if (res.ok) {
+        const updatedRfq = await res.json();
+        setRfq(updatedRfq);
+      }
+    } catch (err) {
+      console.error('Update RFQ revision error:', err);
+    }
+  };
+
 
   // ─── 11. Send RFQ ──────────────────────────────────────────
   const handleSendRFQ = async (rfqId: string) => {
@@ -579,13 +640,39 @@ export function App() {
                   Ranked by AI using explainable score factors and multi-dimensional risk radar.
                 </p>
               </div>
-              <button
-                className="btn btn-primary"
-                onClick={handleGenerateRFQ}
-                disabled={rankedMatches.length === 0}
-              >
-                {getRfqButtonLabel()}
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleRerankSuppliers}
+                  disabled={rankedMatches.length === 0 || isReranking}
+                  style={{
+                    background: 'rgba(56, 189, 248, 0.12)',
+                    color: '#38bdf8',
+                    border: '1px solid rgba(56, 189, 248, 0.35)',
+                    fontSize: '0.85rem',
+                    padding: '0.5rem 0.85rem',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                  }}
+                  title="Re-run Phase 2 ranking algorithm on suppliers already stored in database"
+                >
+                  <RefreshCw size={14} className={isReranking ? 'animate-spin' : ''} />
+                  <span>{isReranking ? 'Re-ranking...' : '⚡ Re-rank Existing Suppliers'}</span>
+                </button>
+
+                <button
+                  className="btn btn-primary"
+                  onClick={handleGenerateRFQ}
+                  disabled={rankedMatches.length === 0}
+                >
+                  {getRfqButtonLabel()}
+                </button>
+              </div>
+
             </div>
 
             {currentRequirement && (
@@ -615,7 +702,7 @@ export function App() {
                 token={token}
                 onApprove={() => {}}
                 onSend={handleSendRFQ}
-                onUpdate={() => {}}
+                onUpdate={handleUpdateRFQ}
                 onStatusChange={handleRFQStatusChange}
                 isSending={isSendingRFQ}
               />
@@ -636,7 +723,19 @@ export function App() {
               token={token}
               onAward={handleAwardSupplier}
             />
-            <ComparisonTable quotations={quotations} recommendation={recommendation} />
+            <ComparisonTable
+              quotations={quotations}
+              recommendation={recommendation}
+              requirementId={currentRequirement?.id}
+              suppliers={rankedMatches.map(m => m.supplier).filter(Boolean)}
+              token={token}
+              rfq={rfq}
+              onQuotationUploaded={() => {
+                if (currentRequirement?.id) {
+                  loadRequirementState(currentRequirement.id);
+                }
+              }}
+            />
           </div>
         )}
 

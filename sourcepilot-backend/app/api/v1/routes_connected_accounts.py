@@ -87,9 +87,7 @@ def authorize_oauth_provider(
     db.add(pending)
     db.commit()
 
-    if settings.MOCK_OAUTH:
-        auth_url = f"http://localhost:5173/oauth/callback/{provider_clean}?code=mock_code_{secrets.token_hex(8)}&state={state}"
-    elif provider_clean == "gmail":
+    if provider_clean == "gmail":
         auth_url = (
             "https://accounts.google.com/o/oauth2/v2/auth?"
             f"client_id={settings.GMAIL_CLIENT_ID}&"
@@ -115,7 +113,7 @@ def authorize_oauth_provider(
 
 
 @router.post("/oauth/callback/{provider}", response_model=ConnectedAccountResponse)
-def handle_oauth_callback(
+async def handle_oauth_callback(
     provider: str,
     payload: OAuthCallbackRequest,
     current_user: User = Depends(get_current_user),
@@ -140,15 +138,53 @@ def handle_oauth_callback(
     if not pending:
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state parameter.")
 
-    # Encrypt tokens securely
-    mock_email = f"{current_user.email.split('@')[0]}@{provider_clean}.com" if "@" in current_user.email else f"user@{provider_clean}.com"
+    connected_email = f"{current_user.email.split('@')[0]}@{provider_clean}.com" if "@" in current_user.email else f"user@{provider_clean}.com"
     access_tok = f"access_{provider_clean}_{payload.code}"
     refresh_tok = f"refresh_{provider_clean}_{payload.code}"
+    expires_in = 3600
 
-    pending.email_address = mock_email
+    # Real Google OAuth code exchange if credentials exist and MOCK_OAUTH is False
+    if not settings.MOCK_OAUTH and provider_clean == "gmail" and settings.GMAIL_CLIENT_ID:
+        import httpx
+        try:
+            async with httpx.AsyncClient() as client:
+                token_resp = await client.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "client_id": settings.GMAIL_CLIENT_ID,
+                        "client_secret": settings.GMAIL_CLIENT_SECRET,
+                        "code": payload.code,
+                        "grant_type": "authorization_code",
+                        "redirect_uri": settings.GMAIL_REDIRECT_URI,
+                        "code_verifier": pending.code_verifier,
+                    },
+                )
+                if token_resp.status_code == 200:
+                    t_data = token_resp.json()
+                    access_tok = t_data.get("access_token", access_tok)
+                    refresh_tok = t_data.get("refresh_token", refresh_tok)
+                    expires_in = t_data.get("expires_in", 3600)
+
+                    user_resp = await client.get(
+                        "https://www.googleapis.com/oauth2/v2/userinfo",
+                        headers={"Authorization": f"Bearer {access_tok}"},
+                    )
+                    if user_resp.status_code == 200:
+                        connected_email = user_resp.json().get("email", connected_email)
+                else:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Google OAuth token exchange failed ({token_resp.status_code}): {token_resp.text}"
+                    )
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"OAuth connection error: {str(e)}")
+
+    pending.email_address = connected_email
     pending.encrypted_access_token = encrypt_token(access_tok)
     pending.encrypted_refresh_token = encrypt_token(refresh_tok)
-    pending.token_expires_at = datetime.utcnow() + timedelta(seconds=3600)
+    pending.token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
     pending.status = "active"
     pending.oauth_state = None
     pending.code_verifier = None
@@ -160,7 +196,7 @@ def handle_oauth_callback(
         action="mailbox_connected",
         entity_type="connected_account",
         entity_id=pending.id,
-        payload_snapshot={"provider": provider_clean, "email": mock_email},
+        payload_snapshot={"provider": provider_clean, "email": connected_email},
     )
     db.add(audit)
 

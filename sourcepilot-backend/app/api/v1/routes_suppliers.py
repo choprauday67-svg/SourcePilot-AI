@@ -49,12 +49,12 @@ async def discover_and_rank_suppliers(
             db.add(supplier)
             db.flush()
 
-            # Create default contact
+            # Create contact (email/phone remain empty/None if unverified from live search)
             contact = SupplierContact(
                 supplier_id=supplier.id,
-                email=cand.contact_email or f"sales@{cand.canonical_domain}",
+                email=cand.contact_email or "",
                 phone=cand.contact_phone,
-                contact_name=f"Sales Team - {cand.company_name}",
+                contact_name=f"Sales Team - {cand.company_name}" if cand.company_name else None,
                 is_primary=True,
                 source_connector=cand.source_connector
             )
@@ -68,8 +68,8 @@ async def discover_and_rank_suppliers(
             requirement_id=requirement_id,
             rating=cand.rating,
             certifications=cand.certifications,
-            moq=cand.raw_metadata.get("moq", "100 units"),
-            lead_time_days=cand.raw_metadata.get("lead_time_days", 14),
+            moq=cand.raw_metadata.get("moq"),
+            lead_time_days=cand.raw_metadata.get("lead_time_days"),
             trust_score=intel["trust_score"],
             risk_flags=intel["risk_flags"]
         )
@@ -149,3 +149,87 @@ def select_suppliers_for_rfq(
 
     db.commit()
     return {"message": f"Successfully selected {len(req.supplier_ids)} suppliers for RFQ."}
+
+
+@router.post("/rerank", response_model=List[SupplierRankedMatchResponse])
+async def rerank_existing_suppliers(
+    requirement_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Re-rank existing suppliers stored in DB for this requirement using the current
+    SupplierRankingAgent without running discovery or calling external APIs.
+    """
+    db_req = db.query(ProcurementRequirement)\
+        .filter(ProcurementRequirement.id == requirement_id, ProcurementRequirement.organization_id == current_user.organization_id)\
+        .first()
+    if not db_req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+
+    existing_matches = db.query(RequirementSupplierMatch)\
+        .filter(RequirementSupplierMatch.requirement_id == requirement_id)\
+        .all()
+
+    if not existing_matches:
+        raise HTTPException(status_code=404, detail="No existing supplier matches found to re-rank for this requirement")
+
+    struct_data = RequirementExtractionOutput.model_validate(db_req.structured_data or {})
+
+    # Reconstruct supplier_records from existing database records without running live discovery or external APIs
+    supplier_records = []
+    for match in existing_matches:
+        sup = db.query(Supplier).filter(Supplier.id == match.supplier_id).first()
+        if not sup:
+            continue
+
+        profile = db.query(SupplierProfile)\
+            .filter(SupplierProfile.supplier_id == sup.id, SupplierProfile.requirement_id == requirement_id)\
+            .first()
+
+        contact = db.query(SupplierContact)\
+            .filter(SupplierContact.supplier_id == sup.id, SupplierContact.is_primary == True)\
+            .first()
+
+        certs = profile.certifications if (profile and profile.certifications) else []
+        summary_text = f"{sup.company_name} - Manufacturer/Supplier of {struct_data.product} in {sup.location_country or 'Global'}"
+
+        intel = {
+            "trust_score": profile.trust_score if profile else 85.0,
+            "risk_flags": profile.risk_flags if profile else [],
+            "risk_analysis": {},
+            "source_connector": contact.source_connector if contact else "web_search",
+            "certifications": certs,
+            "country": sup.location_country or "",
+            "city": sup.location_city or "",
+            "email": contact.email if contact else "",
+            "phone": contact.phone if contact else "",
+            "summary": summary_text,
+            "description": summary_text,
+        }
+
+        supplier_records.append({
+            "id": sup.id,
+            "company_name": sup.company_name,
+            "canonical_domain": sup.canonical_domain or "",
+            "profile": intel
+        })
+
+    # Execute ranking agent with current Phase 2 algorithm
+    ranking_output = await orchestrator.supplier_ranking_agent.execute(struct_data, supplier_records)
+
+    # Update RequirementSupplierMatch rows in DB
+    db.query(RequirementSupplierMatch).filter(RequirementSupplierMatch.requirement_id == requirement_id).delete()
+
+    for rank_item in ranking_output.rankings:
+        match = RequirementSupplierMatch(
+            requirement_id=requirement_id,
+            supplier_id=rank_item.supplier_id,
+            rank_score=rank_item.rank_score,
+            rank_explanation=rank_item.rank_explanation
+        )
+        db.add(match)
+
+    db.commit()
+    return get_ranked_suppliers(requirement_id, current_user, db)
+

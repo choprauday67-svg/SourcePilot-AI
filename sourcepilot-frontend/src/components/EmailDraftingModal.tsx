@@ -11,6 +11,18 @@ interface EmailDraftingModalProps {
 
 const API_BASE = '/api/v1';
 
+function cleanEmailBody(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/^\s*---\s*$/gm, '')
+    .replace(/^###\s*\d*\.?\s*(.+)$/gm, '\n$1:')
+    .replace(/^##\s*(.+)$/gm, '\n$1:')
+    .replace(/^#\s*(.+)$/gm, '$1')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export const EmailDraftingModal: React.FC<EmailDraftingModalProps> = ({
   rfq,
   isOpen,
@@ -263,7 +275,7 @@ export const EmailDraftingModal: React.FC<EmailDraftingModalProps> = ({
                         fontSize: '0.83rem', color: '#cbd5e1', whiteSpace: 'pre-wrap', lineHeight: '1.5',
                         fontFamily: 'Inter, sans-serif'
                       }}>
-                        {draft.body_markdown}
+                        {cleanEmailBody(draft.body_markdown)}
                       </div>
                     </div>
                   )}
