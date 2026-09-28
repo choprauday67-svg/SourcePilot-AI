@@ -30,5 +30,6 @@ dev = [
 ]
 
 [tool.vercel]
-entrypoint = "app.main:app"
+entrypoint = "api.index:app"
+
 
